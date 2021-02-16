@@ -1,0 +1,643 @@
+use ioTest;
+DELIMITER $$
+create PROCEDURE input(IN Priority smallint,IN Parameter JSON, IN d JSON)
+BEGIN
+	DECLARE reqID bigint;
+    DECLARE resID bigint;
+    DECLARE InsertTime timestamp;
+    SET reqID=FLOOR( RAND() *10000000);
+    SET resID=FLOOR( RAND() *10000000);
+    SET InsertTime=now();
+	INSERT INTO Input VALUES(now(),reqID,Priority,Parameter,d);
+    INSERT INTO Output VALUES(resID,'{}',0);
+    INSERT INTO ioMonitor VALUESInput(InsertTime,reqID,resID,"{}");
+END$$
+DELIMITER;
+DELIMITER $$
+create PROCEDURE standardInput(IN Priority smallint,IN Parameter JSON, IN d JSON,OUT reqiD, )
+BEGIN
+	DECLARE reqID bigint;
+    DECLARE resID bigint;
+    DECLARE InsertTime timestamp;
+    SET reqID=FLOOR( RAND() *10000000);
+    SET resID=FLOOR( RAND() *10000000);
+    SET InsertTime=now();
+	INSERT INTO Input VALUES(now(),reqID,Priority,Parameter,d);
+    INSERT INTO Output VALUES(resID,'{}',0);
+    INSERT INTO ioMonitor VALUES(InsertTime,reqID,resID,"{}");
+END$$
+DELIMITER;
+
+CREATE TABLE IF NOT EXISTS `ioTest`.`IO` (
+  `Time` TIMESTAMP NOT NULL,
+  `reqID` BIGINT NOT NULL,
+  `Priority` SMALLINT NULL,
+  `Parameter` JSON NULL,
+  `request` JSON NULL,
+  `result` JSON NULL,
+  `Status` SMALLINT NULL,
+  `history` JSON NULL,
+  PRIMARY KEY (`Time`, `reqID`));
+
+  create PROCEDURE standardInput(IN Priority smallint,IN Parameter JSON, IN req JSON)
+BEGIN
+	DECLARE reqID bigint;
+    DECLARE InsertTime timestamp;
+    SET reqID=FLOOR( RAND() *10000000);
+    SET InsertTime=now();
+	INSERT INTO IO VALUES(now(),reqID,Priority,Parameter,req,"{}",0,"{}");
+END$$
+DELIMITER ;
+
+
+
+drop table ioMonitor;
+drop table Output;
+drop table Input;
+
+CREATE TABLE IF NOT EXISTS `ioTest`.`Output` (
+  `resID` BIGINT NOT NULL,
+  `Result` JSON NULL,
+  PRIMARY KEY (`resID`))
+ENGINE = InnoDB;
+select * from Input;
+drop table Input;
+CREATE TABLE IF NOT EXISTS `ioTest`.`Input` (
+  `reqID` BIGINT NOT NULL,
+  `Priority` SMALLINT NULL,
+  `Parameter` JSON NULL,
+  `request` JSON NULL,
+  PRIMARY KEY (`reqID`))
+ENGINE = InnoDB;
+-- -----------------------------------------------------
+-- Table `mydb`.`ioMonitor`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `ioTest`.`ioMonitor` (
+  `reqID` BIGINT NOT NULL,
+  `resID` BIGINT NOT NULL,
+  `createTime` TIMESTAMP NULL DEFAULT now(),
+  `finishTime` TIMESTAMP NULL DEFAULT NULL,
+  `Status` INT NULL,
+  `pickup` SMALLINT NULL DEFAULT 0,
+  INDEX `fk_ioMonitor_Input_idx` (`reqID` ASC) VISIBLE,
+  INDEX `fk_ioMonitor_Output1_idx` (`resID` ASC) VISIBLE,
+  PRIMARY KEY (`reqID`, `resID`),
+  CONSTRAINT `fk_ioMonitor_Input`
+    FOREIGN KEY (`reqID`)
+    REFERENCES `ioTest`.`Input` (`reqID`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION,
+  CONSTRAINT `fk_ioMonitor_Output1`
+    FOREIGN KEY (`resID`)
+    REFERENCES `ioTest`.`Output` (`resID`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION)
+ENGINE = InnoDB;
+
+
+-- -----------------------------------------------------
+-- Table `mydb`.`IDgenerator`
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS `ioTest`.`idGen` (
+  `ID` BIGINT NOT NULL AUTO_INCREMENT,
+  `Name` VARCHAR(45) NULL,
+  `nextID` BIGINT NULL DEFAULT 0,
+  PRIMARY KEY (`ID`))
+ENGINE = InnoDB;
+
+insert into idGen(Name,nextID) VALUES('Input',0)
+
+select * from  idGen;
+
+
+
+drop procedure NextID;
+ DELIMITER //
+
+ CREATE PROCEDURE NextID (IN inputid bigint,OUT outputid bigint)
+ BEGIN
+	
+    UPDATE  idGen
+    SET nextID = nextID+1
+    WHERE id=inputid LIMIT 1;
+	
+    SELECT nextID INTO outputid
+    from idGen
+    WHERE id=inputid LIMIT 1;
+ END //
+
+ call getNextID(0)
+
+
+drop procedure Input;
+ DELIMITER //
+
+create procedure Input(IN inputPri SMALLINT, IN inputPara JSON,IN req JSON)
+BEGIN
+declare genReqID bigint;
+declare genResID bigint;
+declare currentTime timestamp;
+call nextID(1,genReqID);
+call nextID(2,genResID);
+set currentTime=now();
+INSERT INTO Input Values(genReqID,inputPri,inputPara,req);
+INSERT INTO Output Values(genResID,NULL);
+INSERT INTO ioMonitor Values(genReqID,genResID,currentTime,NULL,0,0);
+select * from Output where id=genResID for update;
+select genReqID,genResID,currentTime;
+END //
+
+
+call Input(3,"{}","{}");
+
+select * from Input;
+SELECT * from Output;
+SELECT * FROM ioMonitor;
+
+
+drop procedure Output;
+ DELIMITER //
+Create procedure Output(IN checkresID bigint)
+begin 
+Select result from Output where resID=checkresID;
+
+END //
+
+
+
+DELIMITER //
+Create procedure updateStatus(IN req bigint,IN res bigint,IN s int)
+begin 
+   UPDATE  ioMonitor
+    SET Status = s
+    WHERE reqID=req AND resID=res LIMIT 1;
+
+END //
+
+UPDATE ioMonitor SET finishTime=now() where reqID=2 AND resID=1 limit 1;
+
+Create procedure updateStatus(IN req bigint,IN res bigint,IN s int)
+begin 
+   UPDATE  ioMonitor
+    SET Status = s
+    WHERE reqID=req AND resID=res LIMIT 1;
+
+END //
+
+Create procedure updateResult(IN res bigint,IN r JSON)
+begin 
+   UPDATE  Output
+    SET Result = r
+    WHERE resID=res LIMIT 1;
+
+END //
+
+drop procedure Output;
+DELIMITER //
+Create procedure Output(IN checkresID bigint)
+begin 
+Select result into @a from Output where resID=checkresID limit 1;
+while @a is null DO
+	DO sleep(1);
+END while ;
+Select result from Output where resID=checkresID limit 1;
+END //
+
+
+DELIMITER //
+Create procedure JSONDECODE(IN req varchar(4000),IN res bigint,IN s int)
+begin 
+DECLARE i INT DEFAULT 0;
+   UPDATE  ioMonitor
+    SET Status = s
+    WHERE reqID=req AND resID=res LIMIT 1;
+
+END //
+
+SET @j='{"@table":"Contract"}';
+SET @s='["SELECT * FROM @table;"]';
+drop procedure JSONDECODE;
+DELIMITER //
+Create procedure JSONDECODE(IN para JSON,IN str JSON)
+begin 
+DECLARE i INT DEFAULT 0;
+DECLARE Ks JSON;
+DECLARE K VARCHAR(40);
+DECLARE V VARCHAR(40);
+DECLARE result varchar(4000);
+
+SET Ks=JSON_KEYS(para);
+WHILE i<JSON_LENGTH(Ks) DO
+	select JSON_VALUE(Ks,CONCAT('$[',i,']')) INTO K;
+    select JSON_EXTRACT(para,CONCAT('$.',K)) INTO V;
+	SELECT REPLACE(str,K,V) INTO result;
+	SELECT i+1 INTO i;
+    
+END WHILE;
+SELECT SUBSTRING(K,1)='"@table"',V, REPLACE(str,K,V);
+
+END; //
+
+CALL JSONDECODE(@j,@s);
+
+use ioTest;
+SET @j='{"@a":"col1","@table":"Contract","@WHERE":""}';
+SET @s='["SELECT @a FROM @table @WHERE;"]';
+drop procedure decode;
+DELIMITER //
+Create procedure decode(IN para JSON,IN str JSON)
+begin 
+DECLARE i INT DEFAULT 0;
+DECLARE Ks JSON;
+DECLARE K VARCHAR(40);
+DECLARE V VARCHAR(40);
+DECLARE result varchar(4000);
+set result=JSON_UNQUOTE(str);
+SET Ks=JSON_KEYS(para);
+set result=str;
+WHILE i<JSON_LENGTH(Ks) DO
+	select JSON_EXTRACT(Ks,CONCAT('$[',i,']')) INTO K;
+    
+    select JSON_EXTRACT(para,CONCAT('$.',K)) INTO V;
+	SELECT REPLACE(result,JSON_UNQUOTE(K),JSON_UNQUOTE(V)) INTO result;
+	SELECT i+1 INTO i;
+END WHILE;
+SELECT result;
+
+END; //
+
+CALL decode(@j,@s);
+dropt table command;
+CREATE TABLE IF NOT EXISTS `ioTest`.`command` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(45) NULL,
+  `command` JSON NULL,
+  PRIMARY KEY (`id`,`name`));
+
+ DELIMITER //
+Create procedure addCommand(IN n varchar(45),IN c JSON)
+begin 
+Insert into command(name,command) VALUES(n,c);
+END //
+
+DELIMITER //
+Create procedure `uploadMission`(IN mis BLOB)
+begin 
+insert into mission(mission,md5) values(mis,md5(mis));
+END //
+
+drop procedure downloadMission;
+DELIMITER //
+Create procedure `downloadMission`(IN mis bigint)
+begin 
+select count(0) into @count from mission where id=mis;
+if @count !=1 then
+select * from mission order by ID desc limit 1;
+end if;
+if @count =1 then
+select * from mission where id =mis limit 1;
+end if;
+END //
+
+CREATE TABLE IF NOT EXISTS `FileServer` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(45) NOT NULL,
+  `ip` VARCHAR(45) NOT NULL,
+  `storage_root` VARCHAR(45) NOT NULL,
+  PRIMARY KEY (`id`));
+
+
+CREATE TABLE IF NOT EXISTS `droneMission` (
+  `id` BIGINT NOT NULL auto_increment,
+  `FileServer_id` BIGINT NOT NULL,
+  `MD5` CHAR(32) NOT NULL,
+  `UpdateTime` TIMESTAMP NULL DEFAULT now(),
+  PRIMARY KEY (`id`, `FileServer_id`),
+  INDEX `fk_droneMission_FileServer_idx` (`FileServer_id` ASC) VISIBLE,
+  CONSTRAINT `fk_droneMission_FileServer`
+    FOREIGN KEY (`FileServer_id`)
+    REFERENCES `FileServer` (`id`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION)
+ENGINE = InnoDB;
+
+
+drop procedure userNameExist;
+
+DELIMITER //
+Create procedure userNameExist(IN user varchar(255),OUT result boolean)
+begin 
+select count(0)!=0 into result From User Where userName=user;
+END //
+
+call userNameExist('DroneTest',@result);
+select @result;
+CREATE TABLE IF NOT EXISTS `userSessionKey` (
+  `id` BIGINT NOT NULL,
+  `sessionKey` CHAR(32) NOT NULL,
+  `time` TIMESTAMP NULL DEFAULT now(),
+  PRIMARY KEY (`id`),
+  INDEX `fk_userSessionKey_Login1_idx` (`id` ASC) VISIBLE,
+  CONSTRAINT `fk_userSessionKey_Login1`
+    FOREIGN KEY (`id`)
+    REFERENCES `User` (`id`)
+    ON DELETE NO ACTION
+    ON UPDATE NO ACTION)
+ENGINE = InnoDB;
+
+
+
+#show tables;
+#select * from FileServer;
+#select * from User;
+#update FileServer set name='aws_win_test' where id=1;
+
+
+
+
+
+
+CREATE TABLE IF NOT EXISTS `User` (
+  `id` BIGINT NOT NULL auto_increment,
+  `userName` VARCHAR(255) NOT NULL,
+  `password` VARCHAR(255) NOT NULL,
+  `email` VARCHAR(255) NOT NULL,
+  `FirstName` VARCHAR(45) NULL,
+  `LastName` VARCHAR(45) NULL,
+  PRIMARY KEY (`id`))
+ENGINE = InnoDB;
+
+drop procedure `login`;
+DELIMITER //
+Create procedure `login`(IN paraUserName varchar(255), IN paraPassword varchar(255),OUT result boolean)
+begin 
+select count(0)=1 into result From User where userName=paraUserName and password=paraPassword limit 1;
+END //
+
+drop procedure `signUp`;
+DELIMITER //
+Create procedure `signUp`(IN paraUserName varchar(255) ,In paraPassword varchar(255),IN paraEmail varchar(255),IN paraFirstName VARCHAR(45), IN paraLastName VARCHAR(45),OUT result int)
+begin 
+CALL userNameExist(paraUserName,@userNameExistResult);
+if @userNameExistResult=1 then
+select 0 into result;
+else 
+insert into User(userName,password,email,FirstName,LastName) values(paraUserName,paraPassword,paraEmail,paraFirstName,paraLastName);
+call updateSessionKey(paraUserName,paraPassword,@dontcare);
+select 1 into result;
+end if;
+
+END //
+
+
+DELIMITER //
+Create procedure editStateCode(IN paraID bigint, in paraStateName varchar(255), IN paracomment varchar(255))
+begin 
+Update State set stateName=paraStateName, comment=paracomment where id=paraID;
+END //
+
+
+DELIMITER //
+Create procedure addStateCode(IN paraStateName varchar(255), IN paracomment varchar(255))
+begin 
+insert into State(stateName,comment) values(paraStateName,paracomment);
+END //
+call editStateCode(2,"NoSuchUser","Login UserName Check");
+call editStateCode(3,"InvalidPassword","Login password Check");
+call editStateCode(4,"UserAlreadyExists","signUp userName Check");
+
+
+
+
+#show procedure status;
+#drop procedure userNameExist;
+
+
+drop procedure updateSessionKey;
+DELIMITER //
+Create procedure updateSessionKey(IN paraUserName varchar(255) ,In paraPassword varchar(255),OUT result int)
+begin 
+declare userID bigint;
+declare sessionKeyUserCount bigint;
+
+select id into userID from User where userName=paraUserName and password=paraPassword;
+select count(0) into sessionKeyUserCount from userSessionKey where id = userID;
+if sessionKeyUserCount=0 then
+insert into userSessionKey(id,sessionKey,time) values(userID,MD5(concat(now(),paraUserName,paraPassword)),now());
+call stateCode('Success',result);
+
+elseif sessionKeyUserCount=1 then
+update userSessionKey set sessionKey=MD5(concat(now(),paraUserName,paraPassword)), time=now() where id=userID;
+call stateCode('Success',result);
+select sessionKey from userSessionKey where id=userID;
+else 
+call stateCode('updateSessionKeyUnknowError',result);
+end if;
+END //
+
+
+
+drop procedure login;
+
+DELIMITER //
+Create procedure login(IN paraUserName varchar(255), IN paraPassword varchar(255),OUT result int)
+begin 
+declare UserNameCount int;
+declare LoginSuccess int;
+select count(0) into UserNameCount From User where userName=paraUserName;
+select count(0) into LoginSuccess From User where userName=paraUserName and password=paraPassword;
+
+if UserNameCount=0 then
+call stateCode("NoSuchUser",result);
+elseif LoginSuccess=0 then
+call stateCode("InvalidPassword",result);
+elseif LoginSuccess=1 then
+#call stateCode("Success",result);
+call updateSessionKey(paraUserName,paraPassword,result);
+end if;
+
+END //
+
+#call signUp('DroneTest1','123','ethanlin1116@gmail.com',"Ethan","Lin",@result);
+#call updateSessionKey("DroneTest2","123",@dontcare);
+
+call Login("DroneTest1","123",@loginresult);
+#select * from userSessionKey;
+
+
+drop procedure getUserId;
+DELIMITER //
+Create procedure getUserId(IN paraSessionKey varchar(255), OUT result bigint, OUT state int)
+begin 
+declare sessionKeyLength int;
+declare castedSessionKey char(32);
+declare idCount int;
+select char_length(paraSessionKey) into sessionKeyLength;
+if sessionKeyLength!=32 then
+select 0 into result;
+call stateCode("InvalidSessionKeyLength",state);
+else 
+select cast(paraSessionKey as char(32)) into castedSessionKey;
+select count(0) into idCount from userSessionKey where sessionKey=castedSessionKey;
+if idCount=0 then
+select 0 into result;
+call StateCode("InvalidSessionKey",state);
+elseif idCount=1 then
+select id into result from userSessionKey where sessionKey=castedSessionKey limit 1;
+call StateCode("Success",state);
+else 
+select 0 into result;
+call StateCode("SessionKeyCollision",state);
+end if;
+end if;
+END //
+
+DELIMITER //
+Create procedure linkMissionToUser(IN sessionKey char(32), IN name varchar(255),OUT result int)
+begin 
+declare UserNameCount int;
+declare LoginSuccess int;
+select count(0) into UserNameCount From User where userName=paraUserName;
+select count(0) into LoginSuccess From User where userName=paraUserName and password=paraPassword;
+
+if UserNameCount=0 then
+call stateCode("NoSuchUser",result);
+elseif LoginSuccess=0 then
+call stateCode("InvalidPassword",result);
+elseif LoginSuccess=1 then
+#call stateCode("Success",result);
+call updateSessionKey(paraUserName,paraPassword,result);
+end if;
+
+END //
+
+
+use drone;
+
+
+
+
+drop procedure searchMission;
+DELIMITER //
+Create procedure `searchMission`(IN paraSessionKey varchar(255),IN paraMD5 char(32),Out result bigint,Out state int)
+begin 
+declare loginState bigint;
+declare paraUserId bigint;
+declare userHasMission int;
+call getUserId(paraSessionKey,paraUserId,loginState);
+
+if loginState !=1 then
+select loginState into state;
+select 0 into result;
+else
+select count(0) into userHasMission from UserMission where MD5=paraMD5 and userId=paraUserId;
+
+if userHasMission=0 then
+call stateCode("MissionNotExistsUnderUser",state);
+select 0 into result;
+else 
+call stateCode("Success",state);
+select FileServer_id into result from droneMission where MD5=paraMd5;
+
+
+
+drop procedure listAllMission;
+DELIMITER //
+Create procedure `listAllMission`(IN paraSessionKey varchar(255),Out state int)
+begin 
+declare loginState bigint;
+declare paraUserId bigint;
+declare userHasMission int;
+call getUserId(paraSessionKey,paraUserId,loginState);
+
+if loginState !=1 then
+select loginState into state;
+else
+select name,time,MD5 from UserMission where userId=paraUserId;
+call stateCode("Success",state);
+end if;
+END //
+
+
+drop procedure userNameExistCheck;
+
+DELIMITER //
+Create procedure userNameExistCheck(IN paraUserName varchar(255),out result int)
+begin
+declare userNameExistCheckCount int;
+select count(0) into userNameExistCheckCount from User where userName=paraUserName;
+if userNameExistCheckCount=0 then
+call stateCode("Success",result);
+else 
+call stateCode("UserAlreadyExists",result);
+end if;
+END//
+
+
+
+
+
+
+
+DELIMITER //
+Create procedure signUp(IN paraUserName varchar(255) ,In paraPassword varchar(255),IN paraEmail varchar(255),IN paraFirstName VARCHAR(45), IN paraLastName VARCHAR(45),OUT result int)
+begin 
+declare userNameExistResult int;
+CALL userNameExistCheck(paraUserName,userNameExistResult);
+if userNameExistResult!=1 then
+select userNameExistResult into result;
+else 
+insert into User(userName,password,email,FirstName,LastName) values(paraUserName,paraPassword,paraEmail,paraFirstName,paraLastName);
+call stateCode("Success",result);
+call updateSessionKey(paraUserName,paraPassword,result);
+end if;
+END //
+
+
+drop procedure updateSessionKey;
+DELIMITER //
+Create procedure updateSessionKey(IN paraUserName varchar(255) ,In paraPassword varchar(255),OUT result int)
+begin 
+declare userID bigint;
+declare sessionKeyUserCount bigint;
+
+select id into userID from User where userName=paraUserName and password=paraPassword;
+select count(0) into sessionKeyUserCount from userSessionKey where id = userID;
+if sessionKeyUserCount=0 then
+insert into userSessionKey(id,sessionKey,time) values(userID,MD5(concat(now(),paraUserName,paraPassword)),now());
+call stateCode('Success',result);
+select sessionKey from userSessionKey where id=userID;
+elseif sessionKeyUserCount=1 then
+update userSessionKey set sessionKey=MD5(concat(now(),paraUserName,paraPassword)), time=now() where id=userID;
+call stateCode('Success',result);
+select sessionKey from userSessionKey where id=userID;
+else 
+call stateCode('updateSessionKeyUnknowError',result);
+end if;
+END //
+select * from userSessionKey;
+
+
+use drone;
+
+
+
+
+drop procedure userInfo;
+DELIMITER //
+Create procedure userInfo(IN paraSessionKey varchar(255),Out state int)
+begin 
+declare loginState bigint;
+declare paraUserId bigint;
+declare userHasMission int;
+call getUserId(paraSessionKey,paraUserId,loginState);
+
+if loginState !=1 then
+select loginState into state;
+else
+select userName,email,FirstName,LastName into userHasMission from UserMission where userId=paraUserId;
+call stateCode("Success",state);
+end if;
+
+END //
+
